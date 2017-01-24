@@ -39,7 +39,7 @@ function CalculateUserIdIndex(userId) {
         return element.indexOf(userId) !== -1;
     }) || "0";
     cacheKeys.reverse();
-    var nextIndex = Number(lastUserId.substr(-1))+1;
+    var nextIndex = Number(lastUserId.match(/\d+$/)[lastUserId.match(/\d+$/).length-1]) + 1;
     return nextIndex;
 }
 
