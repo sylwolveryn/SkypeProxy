@@ -1,50 +1,91 @@
 var express = require('express');
 var router = express.Router();
-var cache = require('memory-cache');
-var users = new Set();
-var cacheKeys = [];
+var cacheKeys = {};
 
 router.get('/', function (req, res, next) {
     res.send('usage: /write/uniqueKey && /read/uniqueKey');
 });
 
 router.all('/write/*', function (req, res, next) {
-    var userId = req.url.split("/")[2] || "";
-    var userIdIndex = CalculateUserIdIndex(userId);
-    var cacheKey = userId + userIdIndex;
-    users.add(userId);
-    cacheKeys.push(cacheKey);
-    cache.put(cacheKey, req.body);
-    res.send(JSON.stringify(cacheKeys));
+    "use strict";
+    let chunks = req.url.split("/");
+    switch (chunks.length) {
+        case 0:
+        case 1:
+        case 2:
+        case 3:
+        default:
+            res.send('<h1>usage: /write/<b>channel</b>/uniqueKey && /read/<b>channel</b>/uniqueKey</h1>');
+            return;
+        case 4:
+            let userId = getUserId(chunks);
+            let channel = getChannel(chunks);
+            let cacheKey = userId + channel;
+            if (firstRequestToCache(userId, channel)) {
+                cacheKeys[cacheKey] = [];
+                cacheKeys[userId + channel + "pointer"] = 0;
+            }
+
+            if (isRequestPopulated(req.body)) {
+                cacheKeys[cacheKey].push(req.body);
+                res.send(cacheKey);
+            } else {
+                res.send("no request received");
+            }
+    }
 });
 
 router.get('/read/*', function (req, res, next) {
-    var userId = getUserId(req);
-    var firstUserIndex = getFirstUserId(userId);
-    var requestToSend = cache.get(firstUserIndex);
-    cache.del(firstUserIndex);
-    cacheKeys.splice(cacheKeys.indexOf(firstUserIndex), 1);
-    res.send(requestToSend);
+    "use strict";
+    let chunks = req.url.split("/");
+    switch (chunks.length) {
+        case 0:
+        case 1:
+        case 2:
+        case 3:
+        default:
+            res.send('<h1>usage: /write/<b>channel</b>/uniqueKey && /read/<b>channel</b>/uniqueKey</h1>');
+            return;
+        case 4:
+            let userId = getUserId(chunks);
+            let channel = getChannel(chunks);
+            let actualUsersPointer = getActualUserPointer(userId + channel) || 0;
+            console.log("actualUsersPointer: " + actualUsersPointer);
+            let cacheKey = cacheKeys[userId + channel] || [];
+            let requestToSend = cacheKey[actualUsersPointer] || null;
+            if (requestToSend !== null) {
+                cacheKeys[userId + channel + "pointer"] = actualUsersPointer + 1;
+            } else {
+                requestToSend = "";
+            }
+
+            res.send(requestToSend);
+    }
 });
 
 module.exports = router;
 
 
-function getUserId(req) {
-    return req.url.split("/")[2] || "";
+function getChannel(chunks) {
+    "use strict";
+    return chunks[2] || "";
 }
 
-function CalculateUserIdIndex(userId) {
-    var lastUserId = cacheKeys.reverse().find( function (element) {
-        return element.indexOf(userId) !== -1;
-    }) || "0";
-    cacheKeys.reverse();
-    var nextIndex = Number(lastUserId.match(/\d+$/)[lastUserId.match(/\d+$/).length-1]) + 1;
-    return nextIndex;
+function getUserId(chunks) {
+    "use strict";
+    return chunks[3] || "";
 }
 
-function getFirstUserId(userId) {
-    return cacheKeys.find(function (element) {
-        return element.indexOf(userId) !== -1;
-    }) || "";
+function getActualUserPointer(userIdWithChannel) {
+    "use strict";
+    return cacheKeys[userIdWithChannel + "pointer"];
+}
+
+function firstRequestToCache(userId, channel) {
+    "use strict";
+    return !cacheKeys[userId + channel];
+}
+
+function isRequestPopulated(body) {
+    return Object.getOwnPropertyNames(body).length > 0;
 }
