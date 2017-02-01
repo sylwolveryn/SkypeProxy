@@ -22,16 +22,16 @@ var router = express.Router();
         let userId = req.params["userId"];
 
         let cacheKey = userId + channel;
-        if (firstRequestToCache(userId, channel)) {
+        if (firstRequestToCache(cacheKey)) {
             cacheKeys[cacheKey] = [];
-            cacheKeys[userId + channel + "pointer"] = 0;
+            cacheKeys[cacheKey + "pointer"] = 0;
         }
 
         if (isRequestPopulated(req.body)) {
             cacheKeys[cacheKey].push(req.body);
             if (cacheKeys[cacheKey].length > 1000) {
                 cacheKeys[cacheKey] = cacheKeys[cacheKey].splice(-100);
-                cacheKeys[userId + channel + "pointer"] = 0;
+                cacheKeys[cacheKey + "pointer"] = 0;
             }
             res.send(cacheKey);
         } else {
@@ -80,8 +80,8 @@ var router = express.Router();
         return cacheKeys[userIdWithChannel + "pointer"];
     }
 
-    function firstRequestToCache(userId, channel) {
-        return !cacheKeys[userId + channel];
+    function firstRequestToCache(cacheKey) {
+        return !cacheKeys[cacheKey];
     }
 
     function isRequestPopulated(body) {
