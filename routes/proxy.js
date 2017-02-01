@@ -39,6 +39,7 @@ var router = express.Router();
         }
     });
 
+
     router.get('/read/:channel/:userId', function (req, res, next) {
         let channel = req.params["channel"];
         let userId = req.params["userId"];
