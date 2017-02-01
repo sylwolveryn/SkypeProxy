@@ -6,98 +6,75 @@ var router = express.Router();
     "use strict";
 
     router.get('/', function (req, res, next) {
-        res.send('usage: /write/uniqueKey && /read/uniqueKey');
+        res.send('usage: /write/channel/userId && /read/channel/userId');
     });
 
-    router.all('/write/*', function (req, res, next) {
-        let chunks = req.url.split("/");
-        switch (chunks.length) {
-            default:
-                res.send('<h1>usage: /write/channel/uniqueKey && /read/channel/uniqueKey</h1>');
-                return;
-            case 4:
-                let userId = getUserId(chunks);
-                let channel = getChannel(chunks);
-                let cacheKey = userId + channel;
-                if (firstRequestToCache(userId, channel)) {
-                    cacheKeys[cacheKey] = [];
-                    cacheKeys[userId + channel + "pointer"] = 0;
-                }
+    router.get('/read', function (req, res, next) {
+        res.send('<h1>usage: /read/channel/userId</h1>');
+    });
 
-                if (isRequestPopulated(req.body)) {
-                    cacheKeys[cacheKey].push(req.body);
-                    if (cacheKeys[cacheKey].length > 1000) {
-                        cacheKeys[cacheKey] = cacheKeys[cacheKey].splice(-100);
-                        cacheKeys[userId + channel + "pointer"] = 0;
-                    }
-                    res.send(cacheKey);
-                } else {
-                    res.send("no request received");
-                }
+    router.all('/write', function (req, res, next) {
+        res.send('<h1>usage: /write/channel/userId</h1>');
+    });
+
+    router.all('/write/:channel/:userId', function (req, res, next) {
+        let channel = req.params["channel"];
+        let userId = req.params["userId"];
+
+        let cacheKey = userId + channel;
+        if (firstRequestToCache(userId, channel)) {
+            cacheKeys[cacheKey] = [];
+            cacheKeys[userId + channel + "pointer"] = 0;
+        }
+
+        if (isRequestPopulated(req.body)) {
+            cacheKeys[cacheKey].push(req.body);
+            if (cacheKeys[cacheKey].length > 1000) {
+                cacheKeys[cacheKey] = cacheKeys[cacheKey].splice(-100);
+                cacheKeys[userId + channel + "pointer"] = 0;
+            }
+            res.send(cacheKey);
+        } else {
+            res.send("no request received");
         }
     });
 
-    router.get('/read-all(*)', function (req, res, next) {
-        let chunks = req.url.split("/");
+    router.get('/read/:channel/:userId', function (req, res, next) {
+        let channel = req.params["channel"];
+        let userId = req.params["userId"];
+
+        let actualUsersPointer = getActualUserPointer(userId + channel) || 0;
+        let cacheKey = cacheKeys[userId + channel] || [];
+        let response = cacheKey[actualUsersPointer] || null;
+        if (response !== null) {
+            cacheKeys[userId + channel + "pointer"] = actualUsersPointer + 1;
+        } else {
+            response = "";
+        }
+
+        res.send(response);
+    });
+
+
+    router.get('/read-all', function (req, res, next) {
+        let channel = req.query["channel"] || "";
+        let userId = req.query["userId"] || "";
         let response = {};
-        let channel;
 
-        switch (chunks.length) {
-            default:
-                res.send(JSON.stringify(cacheKeys));
-                return;
-            case 3:
-                channel = (chunks.length > 1) ? getChannel(chunks) : "";
-                for (const key in cacheKeys) {
-                    if (key.indexOf(channel) !== -1) {
-                        response[key] = cacheKeys[key];
-                    }
-                }
-                break;
-            case 4:
-                channel = (chunks.length > 1) ? getChannel(chunks) : "";
-                let userId = (chunks.length > 2) ? getUserId(chunks) : "";
-                for (const key in cacheKeys) {
-                    if (key.indexOf(userId + channel) !== -1) {
-                        response[key] = cacheKeys[key];
-                    }
-                }
+        if (notFiltered(channel, userId)) {
+            response = cacheKeys;
+        } else  if (filteredByChannelAndUserId(channel, userId)) {
+            response = searchInCacheFor(userId + channel);
+        } else if (isFilteredBy(userId)) {
+            response = searchInCacheFor(userId);
+        } else if (isFilteredBy(channel)) {
+            response = searchInCacheFor(channel);
         }
+
         res.send(JSON.stringify(response));
     });
 
-    router.get('/read/*', function (req, res, next) {
-        let chunks = req.url.split("/");
-        switch (chunks.length) {
-            default:
-                res.send('<h1>usage: /write/channel/uniqueKey && /read/channel/uniqueKey</h1>');
-                return;
-            case 4:
-                let userId = getUserId(chunks);
-                let channel = getChannel(chunks);
-                let actualUsersPointer = getActualUserPointer(userId + channel) || 0;
-                let cacheKey = cacheKeys[userId + channel] || [];
-                let response = cacheKey[actualUsersPointer] || null;
-                if (response !== null) {
-                    cacheKeys[userId + channel + "pointer"] = actualUsersPointer + 1;
-                } else {
-                    response = "";
-                }
-
-                res.send(response);
-        }
-    });
-
     module.exports = router;
-
-
-    function getChannel(chunks) {
-        return chunks[2] || "";
-    }
-
-    function getUserId(chunks) {
-        return chunks[3] || "";
-    }
 
     function getActualUserPointer(userIdWithChannel) {
         return cacheKeys[userIdWithChannel + "pointer"];
@@ -109,5 +86,27 @@ var router = express.Router();
 
     function isRequestPopulated(body) {
         return Object.getOwnPropertyNames(body).length > 0;
+    }
+
+    function filteredByChannelAndUserId(channel, userId) {
+        return channel !== "" && userId !== "";
+    }
+
+    function notFiltered(channel, userId) {
+        return channel === "" && userId === "";
+    }
+
+    function isFilteredBy(filter) {
+        return filter != "";
+    }
+
+    function searchInCacheFor(sought) {
+        let response = {};
+        for (const key in cacheKeys) {
+            if (key.indexOf(sought) !== -1) {
+                response[key] = cacheKeys[key];
+            }
+        }
+        return response;
     }
 })();
