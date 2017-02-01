@@ -4,6 +4,7 @@ var router = express.Router();
 
 (function () {
     "use strict";
+
     router.get('/', function (req, res, next) {
         res.send('usage: /write/uniqueKey && /read/uniqueKey');
     });
